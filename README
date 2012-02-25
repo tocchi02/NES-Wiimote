@@ -1,0 +1,16 @@
+NES-Wiimote.
+The purpose of this project is to operate Famicon by a Wii controller using PIC.
+
+Repository:
+ https://github.com/tocchi02/NES-Wiimote
+
+Support page:
+ http://kyomi-driven.blogspot.com/
+
+
+The source of this project is modifying and creating hid_wii2.zip which Mr. tsujimi created.
+
+bluetooth-HID応用例（wiiリモコン）
+http://phys.sci.hokudai.ac.jp/LABS/yts/pic/GB002/wii.html
+ hid_wii2.zip
+
