@@ -51,6 +51,18 @@ CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
 
 #define DEBUG_MODE
 
+/* 4021 */
+#define J1_START  LATBbits.LATB9
+#define J1_SELECT LATBbits.LATB8
+#define J1_B      LATBbits.LATB7
+#define J1_A      LATBbits.LATB5
+#define J1_DOWN   LATAbits.LATA0
+#define J1_UP     LATAbits.LATA1
+#define J1_LEFT   LATBbits.LATB3
+#define J1_RIGHT  LATBbits.LATB2
+#define PRESS   0
+#define RELEASE 1
+
 // *****************************************************************************
 // *****************************************************************************
 // Configuration Bits
@@ -151,7 +163,9 @@ int step;
 char message[30];
 int end_num;
 
-
+int wii_ctrl1_connected=0;
+unsigned short wii_ctrl_state_back=0;
+unsigned short wii_ctrl_state_now=0;
 
 //******************************************************************************
 //******************************************************************************
@@ -183,16 +197,34 @@ BOOL InitializeSystem ( void )
 	CLKDIVbits.PLLEN = 1;
 	while(pll_startup_counter--);
 
+	/// ポートの入出力モード設定
+	TRISB = 0x8000;				// ポートB RB15(U2RX) input
+	TRISA = 0x0000;
+
+	CNPU1 =0x00CF;				//CN(0,1),2,3,6,7 //0,1は有効にならない？
+	CNPU2 =0x68E0;				//CN21,22,23, 27, 29,30
+
 	// Configure U2RX - put on pin 17 (RP8)
-	RPINR19bits.U2RXR = 8;
+	RPINR19bits.U2RXR = 14;
 	// Configure U2TX - put on pin 16 (RP7)
-	RPOR3bits.RP7R = 5;
+	RPOR7bits.RP15R = 5;
     // Init UART
     UART2Init();
 
     // Set Default demo state
     DemoState = BT_INITIALIZE;
 	HciState=HCI_CMD_RESET;
+
+	/* 4021 */
+	J1_START    = RELEASE;
+	J1_SELECT   = RELEASE;
+	J1_B        = RELEASE;
+	J1_A        = RELEASE;
+	J1_DOWN  = RELEASE;
+	J1_UP    = RELEASE;
+	J1_LEFT  = RELEASE;
+	J1_RIGHT = RELEASE;
+
     return TRUE;
 } // InitializeSystem
 
@@ -718,6 +750,8 @@ void ManageDemoState ( void )
 
 			DemoState = BT_STATE_READ_ACL_HCI;
 			HciState= HID_WRITE_DATA;
+
+			wii_ctrl1_connected = 1;
 			break;
 
 //********************************************************************************
@@ -854,9 +888,120 @@ void ManageDemoState ( void )
 			UART2PrintString(message);
 			for(data_num=0;data_num<buf[2]+4;data_num++)
    	  	        {UART2PutHex(buf[data_num]);UART2PutChar(' ');}
-			UART2PrintString( "\r\n" );
+			UART2PrintString( "　\r\n" );
 			#endif
-		
+
+			{
+#define WII_2		((short)0x0001)
+#define WII_1		((short)0x0002)
+#define WII_B		((short)0x0004)
+#define WII_A		((short)0x0008)
+#define WII_MINUS	((short)0x0010)
+#define WII_HOME	((short)0x0080)
+#define WII_D		((short)0x0100)
+#define WII_U		((short)0x0200)
+#define WII_R		((short)0x0400)
+#define WII_L		((short)0x0800)
+#define WII_PLUS	((short)0x1000)
+#define WII_CNTRLBIT_MERGE (8)
+//buf[10,11]がWiiコントローラ状態
+
+				if(wii_ctrl1_connected != 0) {
+					unsigned short diff;
+					UART2PrintString( "Wii : " );
+	   	  	        UART2PutHex(buf[10]);UART2PutHex(buf[11]);
+					UART2PrintString( "　\r\n" );
+
+					wii_ctrl_state_now = (buf[10] << WII_CNTRLBIT_MERGE)|buf[11];
+
+					/* 前回との差分bitを取り出す */
+					diff = wii_ctrl_state_back ^ wii_ctrl_state_now;
+					UART2PrintString( "back: " );
+					UART2PutHex(wii_ctrl_state_back>>WII_CNTRLBIT_MERGE);UART2PutHex(wii_ctrl_state_back &0x0F);
+					UART2PrintString( "　\r\n" );
+					UART2PrintString( "now : " );
+					UART2PutHex(wii_ctrl_state_now>>WII_CNTRLBIT_MERGE);UART2PutHex(wii_ctrl_state_now &0x0F);
+					UART2PrintString( "　\r\n" );
+
+					UART2PrintString( "diff: " );
+					UART2PutHex(diff>>WII_CNTRLBIT_MERGE);UART2PutHex(diff &0x0F);
+					UART2PrintString( "　\r\n" );
+
+					if( diff & WII_2 ) {
+						UART2PrintString( "WII_2\r\n" );
+						if( wii_ctrl_state_now & WII_2 ) {
+							J1_A = PRESS;
+						} else {
+							J1_A = RELEASE;
+						}
+					}
+
+					if( diff & WII_1 ) {
+						UART2PrintString( "WII_1\r\n" );
+						if( wii_ctrl_state_now & WII_1 ) {
+							J1_B = PRESS;
+						} else {
+							J1_B = RELEASE;
+						}
+					}
+
+					if( diff & WII_PLUS ) { //SELECT
+						UART2PrintString( "WII_PLUS\r\n" );
+						if( wii_ctrl_state_now & WII_PLUS ) {
+							J1_SELECT = PRESS;
+						} else {
+							J1_SELECT = RELEASE;
+						}
+					}
+
+					if( diff & WII_MINUS) { //START
+						UART2PrintString( "WII_MINUS\r\n" );
+						if( wii_ctrl_state_now & WII_MINUS ) {
+							J1_START = PRESS;
+						} else {
+							J1_START = RELEASE;
+						}
+					}
+
+					if( diff & WII_U) { //上
+						UART2PrintString( "WII_U\r\n" );
+						if( wii_ctrl_state_now & WII_U ) {
+							J1_UP = PRESS;
+						} else {
+							J1_UP = RELEASE;
+						}
+					}
+
+					if( diff & WII_D) { //下
+						UART2PrintString( "WII_D\r\n" );
+						if( wii_ctrl_state_now & WII_D ) {
+							J1_DOWN = PRESS;
+						} else {
+							J1_DOWN = RELEASE;
+						}
+					}
+
+					if( diff & WII_L) { //左
+						UART2PrintString( "WII_L\r\n" );
+						if( wii_ctrl_state_now & WII_L ) {
+							J1_LEFT = PRESS;
+						} else {
+							J1_LEFT = RELEASE;
+						}
+					}
+
+					if( diff & WII_R) { //右
+						UART2PrintString( "WII_R\r\n" );
+						if( wii_ctrl_state_now & WII_R ) {
+							J1_RIGHT = PRESS;
+						} else {
+							J1_RIGHT = RELEASE;
+						}
+					}
+
+					wii_ctrl_state_back = wii_ctrl_state_now;
+				}
+			}
 			DemoState = BT_STATE_READ_HCI;
 		}
         break;
