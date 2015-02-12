@@ -51,6 +51,8 @@ CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
 
 #define DEBUG_MODE
 
+#define MAX_BDDEV_NUM 4
+
 /* 4021 */
 #define J1_START  LATBbits.LATB9
 #define J1_SELECT LATBbits.LATB8
@@ -146,19 +148,28 @@ BT_STATE  DemoState;      // Current state of the demo application
 HCI_STATE  HciState;      // Current state of the demo application
 WORD data_size;
 int data_num;
-//unsigned char local_bd_addr[6];//
-unsigned char remote_bd_addr[6];//
-unsigned char clock_offset[2];
+
 unsigned char buf[64];
 unsigned char buf1[64];
-unsigned char handle[2];//a handle for ACL 
-unsigned char src_cid[2];//HID interrupt (data) after hid_flag=2
-unsigned char dst_cid[2];
-unsigned char src_cid1[2];//HID control after hid_flag=3
-unsigned char dst_cid1[2];
-//unsigned char hid_flag=0;
-//unsigned char EP2busy_flag=0;
-unsigned char page_scan_rep_mode;
+
+typedef struct BDdevice {
+//unsigned char local_bd_addr[6];//
+	unsigned char remote_bd_addr[6];//
+	unsigned char clock_offset[2];
+	unsigned char handle[2];//a handle for ACL 
+	unsigned char src_cid[2];//HID interrupt (data) after hid_flag=2
+	unsigned char dst_cid[2];
+	unsigned char src_cid1[2];//HID control after hid_flag=3
+	unsigned char dst_cid1[2];
+	//unsigned char hid_flag=0;
+	//unsigned char EP2busy_flag=0;
+	unsigned char page_scan_rep_mode;
+} BDDevice_t;
+
+BDDevice_t bddev[MAX_BDDEV_NUM];
+
+int bddev_num = 0;
+
 int step;
 char message[30];
 int end_num;
@@ -459,17 +470,17 @@ void ManageDemoState ( void )
 
 		case HCI_CMD_INQUIRY_STATUS:
 			//copy slave BD address
-			remote_bd_addr[0]=buf1[3];
-			remote_bd_addr[1]=buf1[4];
-			remote_bd_addr[2]=buf1[5];
-			remote_bd_addr[3]=buf1[6];
-			remote_bd_addr[4]=buf1[7];
-			remote_bd_addr[5]=buf1[8];
+			bddev[bddev_num].remote_bd_addr[0]=buf1[3];
+			bddev[bddev_num].remote_bd_addr[1]=buf1[4];
+			bddev[bddev_num].remote_bd_addr[2]=buf1[5];
+			bddev[bddev_num].remote_bd_addr[3]=buf1[6];
+			bddev[bddev_num].remote_bd_addr[4]=buf1[7];
+			bddev[bddev_num].remote_bd_addr[5]=buf1[8];
 			//copy page_scan_repetitation_mode
-			page_scan_rep_mode=buf1[9];
+			bddev[bddev_num].page_scan_rep_mode=buf1[9];
 			//copy clock offset
-			clock_offset[0]=buf1[15];
-			clock_offset[1]=buf1[16];
+			bddev[bddev_num].clock_offset[0]=buf1[15];
+			bddev[bddev_num].clock_offset[1]=buf1[16];
 
 			end_num=0x01;strcpy(message,"HCI_CMD_INQUIRY_STATUS: ");//buf1[2] must be zero
 			DemoState = BT_STATE_READ_EP1;
@@ -481,18 +492,18 @@ void ManageDemoState ( void )
 			buf1[0]=0x05;
 			buf1[1]=0x04;
 			buf1[2]=0x0D;
-			buf1[3]=remote_bd_addr[0];//******************************************
-			buf1[4]=remote_bd_addr[1];//BD address (6 octets) of the slave bluetooth
-			buf1[5]=remote_bd_addr[2];//
-			buf1[6]=remote_bd_addr[3];//
-			buf1[7]=remote_bd_addr[4];//
-			buf1[8]=remote_bd_addr[5];//******************************************
+			buf1[3]=bddev[bddev_num].remote_bd_addr[0];//******************************************
+			buf1[4]=bddev[bddev_num].remote_bd_addr[1];//BD address (6 octets) of the slave bluetooth
+			buf1[5]=bddev[bddev_num].remote_bd_addr[2];//
+			buf1[6]=bddev[bddev_num].remote_bd_addr[3];//
+			buf1[7]=bddev[bddev_num].remote_bd_addr[4];//
+			buf1[8]=bddev[bddev_num].remote_bd_addr[5];//******************************************
 			buf1[9]=0x10;//0x0010 DH1
 			buf1[10]=0x00;
-			buf1[11]=page_scan_rep_mode;//01
+			buf1[11]=bddev[bddev_num].page_scan_rep_mode;//01
 			buf1[12]=0x00;//00
-			buf1[13]=clock_offset[0];//copy clock offset
-			buf1[14]=clock_offset[1];//
+			buf1[13]=bddev[bddev_num].clock_offset[0];//copy clock offset
+			buf1[14]=bddev[bddev_num].clock_offset[1];//
 			buf1[15]=0x00;
 			data_size=16;
 			DemoState = BT_STATE_WRITE_CLASS;
@@ -507,7 +518,7 @@ void ManageDemoState ( void )
 
 		case HCI_CMD_SAVE_HANDLE:
 			if(buf1[2]!=0x00) {HciState = HCI_CMD_CREAT_CONNECTION; break;}//when connection is failed, retry.
-			handle[0]=buf1[3];handle[1]=buf1[4]+0x20;//save connection handle and add (PB flag + BC flag)
+			bddev[bddev_num].handle[0]=buf1[3];bddev[bddev_num].handle[1]=buf1[4]+0x20;//save connection handle and add (PB flag + BC flag)
 			HciState = 	L2CAP_CON_REQ11;
 		    break;
 
@@ -515,8 +526,8 @@ void ManageDemoState ( void )
 //OPEN a channel for HID_Control 0x0011
 		case  L2CAP_CON_REQ11:
 
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x0c;//length of sending data+4 
 			buf[3]=0x00;//
 			buf[4]=0x08;//length of sending data
@@ -551,13 +562,13 @@ void ManageDemoState ( void )
 
 //********************************************************************************
 		case  L2CAP_CONFIG_REQ11:
-			dst_cid[0]=buf[12];
-			dst_cid[1]=buf[13];
-			src_cid[0]=buf[14];
-			src_cid[1]=buf[15];		
+			bddev[bddev_num].dst_cid[0]=buf[12];
+			bddev[bddev_num].dst_cid[1]=buf[13];
+			bddev[bddev_num].src_cid[0]=buf[14];
+			bddev[bddev_num].src_cid[1]=buf[15];		
 
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x10;//length of sending data+4 
 			buf[3]=0x00;//
 			buf[4]=0x0c;//length of sending data
@@ -568,8 +579,8 @@ void ManageDemoState ( void )
 			buf[9]=0x02;//
 			buf[10]=0x08;//
 			buf[11]=0x00;//
-			buf[12]=dst_cid[0];//
-			buf[13]=dst_cid[1];//
+			buf[12]=bddev[bddev_num].dst_cid[0];//
+			buf[13]=bddev[bddev_num].dst_cid[1];//
 			buf[14]=0x00;//
 			buf[15]=0x00;//
 			buf[16]=0x01;//
@@ -603,8 +614,8 @@ void ManageDemoState ( void )
 			buf[19]=buf[17];//
 			buf[18]=buf[16];//
 
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x12;//length of sending data+4 
 			buf[3]=0x00;//
 			buf[4]=0x0e;//length of sending data
@@ -615,8 +626,8 @@ void ManageDemoState ( void )
 //			buf[9]+=0x01;//
 			buf[10]=0x0a;//
 			buf[11]=0x00;//
-			buf[12]=dst_cid[0];//
-			buf[13]=dst_cid[1];//
+			buf[12]=bddev[bddev_num].dst_cid[0];//
+			buf[13]=bddev[bddev_num].dst_cid[1];//
 			buf[14]=0x00;//
 			buf[15]=0x00;//
 			buf[16]=0x00;//
@@ -633,8 +644,8 @@ void ManageDemoState ( void )
 //OPEN a channel for HID_Interrupt 0x0013
 
 		case  L2CAP_CON_REQ13:
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x0c;//length of sending data+4 
 			buf[3]=0x00;//
 			buf[4]=0x08;//length of sending data
@@ -667,13 +678,13 @@ void ManageDemoState ( void )
 
 //********************************************************************************
 		case  L2CAP_CONFIG_REQ13:
-			dst_cid1[0]=buf[12];
-			dst_cid1[1]=buf[13];
-			src_cid1[0]=buf[14];
-			src_cid1[1]=buf[15];		
+			bddev[bddev_num].dst_cid1[0]=buf[12];
+			bddev[bddev_num].dst_cid1[1]=buf[13];
+			bddev[bddev_num].src_cid1[0]=buf[14];
+			bddev[bddev_num].src_cid1[1]=buf[15];		
 
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x10;//length of sending data+4 
 			buf[3]=0x00;//
 			buf[4]=0x0c;//length of sending data
@@ -684,8 +695,8 @@ void ManageDemoState ( void )
 			buf[9]+=0x01;//
 			buf[10]=0x08;//
 			buf[11]=0x00;//
-			buf[12]=dst_cid1[0];//
-			buf[13]=dst_cid1[1];//
+			buf[12]=bddev[bddev_num].dst_cid1[0];//
+			buf[13]=bddev[bddev_num].dst_cid1[1];//
 			buf[14]=0x00;//
 			buf[15]=0x00;//
 			buf[16]=0x01;//
@@ -718,8 +729,8 @@ void ManageDemoState ( void )
 			buf[19]=buf[17];//
 			buf[18]=buf[16];//
 
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x12;//length of sending data+4 
 			buf[3]=0x00;//
 			buf[4]=0x0e;//length of sending data
@@ -730,8 +741,8 @@ void ManageDemoState ( void )
 //			buf[9]+=0x01;//
 			buf[10]=0x0a;//
 			buf[11]=0x00;//
-			buf[12]=dst_cid1[0];//
-			buf[13]=dst_cid1[1];//
+			buf[12]=bddev[bddev_num].dst_cid1[0];//
+			buf[13]=bddev[bddev_num].dst_cid1[1];//
 			buf[14]=0x00;//
 			buf[15]=0x00;//
 			buf[16]=0x00;//
@@ -756,14 +767,14 @@ void ManageDemoState ( void )
 
 //********************************************************************************
 		case  HID_WRITE_DATA:
-			buf[0]=handle[0];
-			buf[1]=handle[1];
+			buf[0]=bddev[bddev_num].handle[0];
+			buf[1]=bddev[bddev_num].handle[1];
 			buf[2]=0x07;//length of sending
 			buf[3]=0x00;//
 			buf[4]=0x03;
 			buf[5]=0x00;
-			buf[6]=dst_cid1[0];
-			buf[7]=dst_cid1[1];
+			buf[6]=bddev[bddev_num].dst_cid1[0];
+			buf[7]=bddev[bddev_num].dst_cid1[1];
 			buf[8]=0xa2;
 			buf[9]=0x11;
 			buf[10]=0x40;
