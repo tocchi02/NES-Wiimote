@@ -777,7 +777,7 @@ void ManageDemoState ( void )
 			buf[7]=bddev[bddev_num].dst_cid1[1];
 			buf[8]=0xa2;
 			buf[9]=0x11;
-			buf[10]=1 << bddev_num; // Turn on Wiimote LED which indicates player number.
+			buf[10]=1 << (bddev_num+4); // Turn on Wiimote LED which indicates player number.
 
 			data_size=11;
 
