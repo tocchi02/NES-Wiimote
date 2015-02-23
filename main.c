@@ -917,6 +917,25 @@ void ManageDemoState ( void )
 #define WII_CNTRLBIT_MERGE (8)
 //buf[10,11]‚ªWiiƒRƒ“ƒgƒ[ƒ‰ó‘Ô
 
+				int i = 0;
+				int curr_controller = 0;
+				int find_num = bddev_num+1;
+				// find controller
+				for(i=0; i< find_num; i++) {
+					if( bddev[bddev_num].handle[0] == buf[0]) {
+						break;
+					}
+				}
+				if ( i == find_num ) {
+					UART2PrintString( "Unknown handle:" );
+					UART2PutHex(buf[0]);
+					UART2PrintString( "\r\n" );
+
+					break; // error
+				} else {
+					curr_controller = i;
+				}
+
 				if(wii_ctrl1_connected != 0) {
 					unsigned short diff;
 					UART2PrintString( "Wii : " );
