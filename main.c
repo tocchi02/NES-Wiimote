@@ -169,6 +169,7 @@ typedef struct BDdevice {
 BDDevice_t bddev[MAX_BDDEV_NUM];
 
 int bddev_num = 0;
+int find_dev_num = 0;
 
 int step;
 char message[30];
@@ -454,7 +455,7 @@ void ManageDemoState ( void )
 			buf1[4]=0x8b;
 			buf1[5]=0x9e;
 			buf1[6]=0x05;//waiting time (5 * 1.28 sec)
-			buf1[7]=0x01;//if there are bluetooth devices around you, you should give a maximum number here. 
+			buf1[7]=0x03;//if there are bluetooth devices around you, you should give a maximum number here. 
 			data_size=8;
 			DemoState = BT_STATE_WRITE_CLASS;
 			HciState = HCI_CMD_INQUIRY_RESULT;
@@ -469,22 +470,31 @@ void ManageDemoState ( void )
 			break;
 
 		case HCI_CMD_INQUIRY_STATUS:
-			//copy slave BD address
-			bddev[bddev_num].remote_bd_addr[0]=buf1[3];
-			bddev[bddev_num].remote_bd_addr[1]=buf1[4];
-			bddev[bddev_num].remote_bd_addr[2]=buf1[5];
-			bddev[bddev_num].remote_bd_addr[3]=buf1[6];
-			bddev[bddev_num].remote_bd_addr[4]=buf1[7];
-			bddev[bddev_num].remote_bd_addr[5]=buf1[8];
-			//copy page_scan_repetitation_mode
-			bddev[bddev_num].page_scan_rep_mode=buf1[9];
-			//copy clock offset
-			bddev[bddev_num].clock_offset[0]=buf1[15];
-			bddev[bddev_num].clock_offset[1]=buf1[16];
+			//find two or more controllers.
+			if(buf1[0]!=0x01) {
+				//copy slave BD address
+				bddev[find_dev_num].remote_bd_addr[0]=buf1[3];
+				bddev[find_dev_num].remote_bd_addr[1]=buf1[4];
+				bddev[find_dev_num].remote_bd_addr[2]=buf1[5];
+				bddev[find_dev_num].remote_bd_addr[3]=buf1[6];
+				bddev[find_dev_num].remote_bd_addr[4]=buf1[7];
+				bddev[find_dev_num].remote_bd_addr[5]=buf1[8];
+				//copy page_scan_repetitation_mode
+				bddev[find_dev_num].page_scan_rep_mode=buf1[9];
+				//copy clock offset
+				bddev[find_dev_num].clock_offset[0]=buf1[15];
+				bddev[find_dev_num].clock_offset[1]=buf1[16];
 
-			end_num=0x01;strcpy(message,"HCI_CMD_INQUIRY_STATUS: ");//buf1[2] must be zero
-			DemoState = BT_STATE_READ_EP1;
-			HciState = HCI_CMD_CREAT_CONNECTION;
+				find_dev_num++;
+				buf1[0]=0xff;
+				HciState = HCI_CMD_INQUIRY_RESULT;
+				return;
+
+			} else {
+				end_num=0x01;strcpy(message,"HCI_CMD_INQUIRY_STATUS: ");//buf1[2] must be zero
+				DemoState = BT_STATE_READ_EP1;
+				HciState = HCI_CMD_CREAT_CONNECTION;
+			}
 			break;
 
 //********************************************************************************
@@ -782,8 +792,13 @@ void ManageDemoState ( void )
 			data_size=11;
 
 			DemoState = BT_STATE_WRITE_ACL;
-			HciState =	HID_READ_DATA;
 
+			bddev_num++;
+			if(bddev_num < find_dev_num) {			
+				HciState =	HCI_CMD_CREAT_CONNECTION;
+			} else { 
+				HciState =	HID_READ_DATA;
+			}
 			break;
 
 //********************************************************************************
@@ -839,7 +854,7 @@ void ManageDemoState ( void )
 
     case BT_STATE_READ_CLASS_WAITING:
         if (!USBHostGenericRx1IsBusy(deviceAddress)){
-
+			if(buf1[0]==0x01){ DemoState =BT_STATE_PROCESS; break;}
 			if(buf1[0]!=end_num){ DemoState =BT_STATE_READ_EP1; break;}
 
 			#ifdef DEBUG_MODE
