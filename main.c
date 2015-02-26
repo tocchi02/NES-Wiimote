@@ -937,7 +937,7 @@ void ManageDemoState ( void )
 				int find_num = bddev_num+1;
 				// find controller
 				for(i=0; i< find_num; i++) {
-					if( bddev[bddev_num].handle[0] == buf[0]) {
+					if( bddev[i].handle[0] == buf[0]) {
 						break;
 					}
 				}
