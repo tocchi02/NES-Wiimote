@@ -164,6 +164,8 @@ typedef struct BDdevice {
 	//unsigned char hid_flag=0;
 	//unsigned char EP2busy_flag=0;
 	unsigned char page_scan_rep_mode;
+
+	unsigned short wii_ctrl_state_back;
 } BDDevice_t;
 
 BDDevice_t bddev[MAX_BDDEV_NUM];
@@ -175,8 +177,6 @@ int step;
 char message[30];
 int end_num;
 
-int wii_ctrl1_connected=0;
-unsigned short wii_ctrl_state_back=0;
 unsigned short wii_ctrl_state_now=0;
 
 //******************************************************************************
@@ -772,7 +772,6 @@ void ManageDemoState ( void )
 			DemoState = BT_STATE_READ_ACL_HCI;
 			HciState= HID_WRITE_DATA;
 
-			wii_ctrl1_connected = 1;
 			break;
 
 //********************************************************************************
@@ -951,7 +950,7 @@ void ManageDemoState ( void )
 					curr_controller = i;
 				}
 
-				if(wii_ctrl1_connected != 0) {
+				if(curr_controller != 0) {
 					unsigned short diff;
 					UART2PrintString( "Wii : " );
 	   	  	        UART2PutHex(buf[10]);UART2PutHex(buf[11]);
@@ -960,9 +959,9 @@ void ManageDemoState ( void )
 					wii_ctrl_state_now = (buf[10] << WII_CNTRLBIT_MERGE)|buf[11];
 
 					/* ‘O‰ñ‚Æ‚Ì·•ªbit‚ðŽæ‚èo‚· */
-					diff = wii_ctrl_state_back ^ wii_ctrl_state_now;
+					diff = bddev[curr_controller].wii_ctrl_state_back ^ wii_ctrl_state_now;
 					UART2PrintString( "back: " );
-					UART2PutHex(wii_ctrl_state_back>>WII_CNTRLBIT_MERGE);UART2PutHex(wii_ctrl_state_back &0x0F);
+					UART2PutHex(bddev[curr_controller].wii_ctrl_state_back>>WII_CNTRLBIT_MERGE);UART2PutHex(bddev[curr_controller].wii_ctrl_state_back &0x0F);
 					UART2PrintString( "@\r\n" );
 					UART2PrintString( "now : " );
 					UART2PutHex(wii_ctrl_state_now>>WII_CNTRLBIT_MERGE);UART2PutHex(wii_ctrl_state_now &0x0F);
@@ -1044,7 +1043,7 @@ void ManageDemoState ( void )
 						}
 					}
 
-					wii_ctrl_state_back = wii_ctrl_state_now;
+					bddev[curr_controller].wii_ctrl_state_back = wii_ctrl_state_now;
 				}
 			}
 			DemoState = BT_STATE_READ_HCI;
