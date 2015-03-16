@@ -455,7 +455,7 @@ void ManageDemoState ( void )
 			buf1[4]=0x8b;
 			buf1[5]=0x9e;
 			buf1[6]=0x05;//waiting time (5 * 1.28 sec)
-			buf1[7]=0x03;//if there are bluetooth devices around you, you should give a maximum number here. 
+			buf1[7]=0x02;//if there are bluetooth devices around you, you should give a maximum number here. // WiiƒŠƒ‚ƒRƒ“Ú‘±”
 			data_size=8;
 			DemoState = BT_STATE_WRITE_CLASS;
 			HciState = HCI_CMD_INQUIRY_RESULT;
